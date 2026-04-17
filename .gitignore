@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+venv/
+.venv/
+dist/
+.env
+*.log
+
+# Node / React
+node_modules/
+frontend-react/dist/
+frontend-react/.env.local
+frontend-react/.env.production
+
+# Mac
+.DS_Store
+.AppleDouble
+
+# Docker
+*.dockerignore
+
+# AWS / secrets
+*.pem
+.aws/

@@ -1,0 +1,72 @@
+name: Deploy CyberShield to AWS
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  # ── Deploy Backend to EC2 ────────────────────────────────────────────────────
+  deploy-backend:
+    name: Deploy Backend (EC2)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Deploy via SSH to EC2
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/prasrishiiiii
+            git pull origin main
+            docker compose down
+            docker compose up -d --build
+            echo "✅ Backend deployed successfully"
+
+  # ── Deploy Frontend to S3 ───────────────────────────────────────────────────
+  deploy-frontend:
+    name: Deploy Frontend (S3 + CloudFront)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install and Build
+        working-directory: frontend-react
+        env:
+          VITE_API_URL: ${{ secrets.EC2_API_URL }}
+        run: |
+          npm install
+          npm run build
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Upload to S3
+        run: |
+          aws s3 sync frontend-react/dist/ s3://${{ secrets.S3_BUCKET_NAME }} \
+            --delete \
+            --cache-control "max-age=31536000,public" \
+            --exclude "index.html"
+
+          aws s3 cp frontend-react/dist/index.html s3://${{ secrets.S3_BUCKET_NAME }}/index.html \
+            --cache-control "no-cache,no-store,must-revalidate"
+
+      - name: Invalidate CloudFront Cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
+            --paths "/*"
+          echo "✅ Frontend deployed and CDN cache cleared"
